@@ -1,0 +1,155 @@
+---
+title: "Análise Núcleo de Saúde INSPER"
+author: "Maria Cruz"
+date: "2026-03-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+```
+
+# Decisões metodológicas
+
+Os dados foram coletados do FTP do SIH do datasus a partir de download automático. Os microdados foram baixados para cada mês e salvos em ".dbc". Posteriormente, cada base de dados foi aberta e combinada no período observado. 
+
+A limpeza dos dados se deu pela seleção da amostra: primeiro, escolhendo o município de ocorrência das internações pelo código do município na variável `mun_mov`; depois, seleciono as internações neonatais pela idade dos pacientes -- 0 a 27 dias -- e pela seleção da categoria de dias na variável `cod_idade`; para seleção das internações por parto, escolhi filtrar pela CID de diagnóstico primária na variável `diag_princ`, pelos códigos entre "O80" a "O84". Além disso, selecionei as variáveis mais relevantes para a análise, como raça, etnia, idade, CID principal e outras.
+
+## Estatísticas descritivas
+
+```{r}
+intern_parto <- readxl::read_xlsx('data/clean/intern_parto.xlsx')
+
+intern_neonatais <- readxl::read_xlsx('data/clean/intern_neonatais.xlsx')
+```
+
+Primeiro, devo observar as causas de internação neonatal mais comuns nesse período. No código abaixo observo que a CID principal `P599` que é "icterícia neonatal não especificada" foi a mais comum no período, representando 20% das internações. A segunda causa mais comum foi "Outros desconfortos respiratórios do recém-nascido" e a terceira causa foi "Outros recém-nascidos de pré-termo".
+
+```{r}
+intern_neonatais %>% 
+  dplyr::group_by(diag_princ) %>% 
+  dplyr::count() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(desc(n)) %>% 
+  dplyr::mutate(total = sum(n),
+                perc = n*100/total) %>% 
+  dplyr_row_slice(1:3) %>% 
+  dplyr::select(diag_princ,perc)
+```
+Agrupando os códigos, podemos observar que as causas mais comuns são transtornos hemorrágicos e hematológicos do feto e do recém-nascido, asfixia ao nascer e fatores maternos e por complicações da gravidez, do trabalho de parto e do parto.
+
+```{r}
+intern_neonatais %>% 
+  dplyr::mutate(cid = stringr::str_sub(diag_princ, 1, 2)) %>% 
+  dplyr::group_by(cid) %>% 
+  dplyr::count() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(desc(n)) %>% 
+  dplyr::mutate(total = sum(n),
+                perc = n*100/total) %>% 
+  dplyr_row_slice(1:3) %>% 
+  dplyr::select(cid,perc)
+```
+
+
+Os diagnósticos principais se referem principalmente ao baixo peso ao nascer de recém-nascidos, possivelmente associado à prematuridade. Os diagnósticos têm maior risco de mortalidade em comparação com a primeira causa reportada, eles representam mais de 30% das mortes neste paríodo.
+
+```{r}
+intern_neonatais %>% 
+  dplyr::filter(morte==1) %>% 
+  dplyr::group_by(diag_princ) %>% 
+  dplyr::count() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(desc(n)) %>% 
+  dplyr::mutate(total = sum(n),
+                perc = n*100/total) %>% 
+  dplyr_row_slice(1:3) %>% 
+  dplyr::select(diag_princ,perc)
+```
+
+Ao analisar a raça e cor dos internados, observo que crianças negras representam a maioria das mortes nas causas principais observadas acima.
+
+```{r}
+intern_neonatais %>% 
+  dplyr::filter(morte==1) %>% 
+  dplyr::mutate(raca = case_when(raca_cor == '01' ~  'Branca',
+                                 raca_cor == '02' ~ 'Negra',
+                                 raca_cor == '03' ~ 'Negra',
+                                 raca_cor == T ~ 'Outro')) %>% 
+  dplyr::group_by(diag_princ, raca) %>% 
+  dplyr::count() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(total = sum(n),
+                perc = n*100/total) %>% 
+  dplyr::arrange(desc(perc)) %>% 
+  dplyr_row_slice(1:3) %>% 
+  dplyr::select(diag_princ,perc,raca)
+```
+
+Dentre os procedimentos mais comuns realizados nas internações neonatais estão tratamentos de transtornos respiratórios e cardiovasculares, e tratamentos de hemorragias. 
+
+```{r}
+intern_neonatais %>% 
+  dplyr::group_by(proc_rea) %>% 
+  dplyr::count() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(desc(n)) %>% 
+  dplyr::mutate(total = sum(n),
+                perc = n*100/total) %>% 
+  dplyr_row_slice(1:3) %>% 
+  dplyr::select(proc_rea,perc)
+```
+
+Em seguida, em relação às internações associadas ao parto, observo primeiro as causas principais de internação. Internações por cesariana foram somente a terceira causa nesse período em São Paulo, refletindo 7% das internações.
+
+
+```{r}
+intern_parto %>% 
+  dplyr::group_by(diag_princ) %>% 
+  dplyr::count() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(desc(n)) %>% 
+  dplyr::mutate(total = sum(n),
+                perc = n*100/total) %>% 
+  dplyr_row_slice(1:3) %>% 
+  dplyr::select(diag_princ,perc)
+```
+
+Para observar o perfil das mulheres internadas, observo a idade média das mulheres é de 26 anos, e que as internações de adolescentes representam 12% da amostra e as principais causas de internação na adolescência são as mesmas do total, com menor incidência de parto por cesariana.
+
+
+```{r}
+intern_parto %>% mutate(media = mean(idade, na.rm = T)) %>% distinct(media)
+```
+
+```{r}
+n <- intern_parto %>% 
+  dplyr::filter(idade %in% 15:19) %>% 
+  dplyr::count()
+
+total <- intern_parto %>% 
+  dplyr::count()
+
+n*100/total
+```
+
+```{r}
+intern_parto %>% 
+  dplyr::filter(idade %in% 15:19) %>% 
+  dplyr::group_by(diag_princ) %>% 
+  dplyr::count() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(desc(n)) %>% 
+  dplyr::mutate(total = sum(n),
+                perc = n*100/total) %>% 
+  dplyr_row_slice(1:3) %>% 
+  dplyr::select(diag_princ,perc)
+```
+
+Outras análises interessantes podem ser realizadas explorando as variáveis de raça das mulheres internadas, o número de filhos, método contraceptivo utilizado e as possíveis causas de morte das internações. Essas analises podem mensurar o cenário de gravidez de risco e as possíveis formas de se evitar a mortalidade pelas causas de internação.
+
